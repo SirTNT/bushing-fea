@@ -1,0 +1,171 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1.8cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{adjustbox}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{float}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=*}
+\setlength{\parskip}{3pt}
+\setlength{\parindent}{0pt}
+\graphicspath{{../figures/}}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.85}
+\setlength{\textfloatsep}{8pt plus 2pt}
+\setlength{\floatsep}{6pt plus 2pt}
+\input{generated/values.tex}
+
+\title{Simplified Transformer Bushing: Static, Modal and Thermal-Structural Finite Element Study}
+\author{Archis Mahore}
+\date{\V{date}}
+
+\begin{document}
+\maketitle
+\vspace{-1.5em}
+
+\section{Purpose and scope}
+This report describes a self-directed finite element study of a simplified dry-type (resin-impregnated) condenser bushing. The aim is to show a complete simulation workflow: geometry and mesh, static, modal, thermal and thermal-structural analyses, verification against hand calculations and a mesh convergence study, all with open-source tools (Gmsh~\V{ver-gmsh}, FEniCSx/dolfinx~\V{ver-dolfinx}, PETSc/SLEPc~\V{ver-petsc}). The load cases are based on the type of checks in IEC~60137 (bushings) and IEEE~693 (seismic). The study is \emph{not} a design, rating or qualification of a bushing, does not claim compliance with these standards, and uses assumed material data. Every number in this report is read from \texttt{results/\allowbreak results.json}, which is produced by \texttt{src/\allowbreak run\_all.py}.
+
+\section{Model}
+\textbf{Geometry.} Three coaxial bodies along the vertical $z$ axis ($z=0$ at the core bottom): a copper conductor tube ($\varnothing$\V{Dco-mm}/\V{Dci-mm}~mm, length \V{Lcond-m}~m, $z=\V{zc0-m}$ to \V{zc1-m}~m), an epoxy core bonded around it ($\varnothing$\V{Dk-mm}~mm, length \V{Lcore-m}~m) and an aluminium flange ring ($\varnothing$\V{Df-mm}~mm, \V{tf-mm}~mm thick, bottom face at $z=\V{zf0-m}$~m). The bore of the conductor is empty. Simplifications: no silicone sheds or housing, no condenser foils, no oil-side details, perfect bonding between bodies, linear elastic isotropic materials with properties at one temperature.
+
+\textbf{Materials} (Table~\ref{tab:mat}): typical literature values, assumed; not taken from a datasheet.
+\begin{table}[!htb]\centering\small
+\caption{Material properties (assumed). $\rho_e$ is the electrical resistivity at \SI{20}{\celsius}.}\label{tab:mat}
+\begin{adjustbox}{max width=\textwidth}\input{generated/materials_table.tex}\end{adjustbox}
+\end{table}
+
+\textbf{Mesh.} The bodies are fragmented in Gmsh (OpenCASCADE) so the mesh is conforming at the bonded interfaces. Quadratic 10-node tetrahedra, global size $h=\V{mesh-h-mm}$~mm (the single mesh parameter), refined to \V{mesh-hc-mm}~mm at the conductor and \V{mesh-hf-mm}~mm at the flange: \V{mesh-nel} elements, \V{mesh-nnodes} nodes, \V{ndofs} displacement degrees of freedom. Minimum scaled Jacobian \V{mesh-qmin} (mean \V{mesh-qmean}). Displacement and temperature use quadratic Lagrange elements.
+
+\textbf{Boundary conditions and load cases.} The flange bottom face is fully fixed in all structural cases (a sliding support is used once as a sensitivity case, Section~\ref{sec:tm}).
+\begin{itemize}
+\item S1 cantilever: horizontal force $F=\V{F-N}$~N as a uniform traction on the top conductor end face. Illustrative value; the IEC~60137 test load depends on the rating.
+\item S2 self-weight: gravity $g=\V{g}$~m/s$^2$.
+\item S3 static-equivalent seismic: horizontal acceleration \V{seis-g}\,$g$ on all mass plus gravity. A simplified screening check, not a seismic qualification.
+\item Modal: same support, first \V{n-modes} modes, SLEPc Krylov-Schur with shift-invert about zero.
+\item Thermal: Joule heating $q=I^2\rho_e/A^2$ in the copper with $I=\V{I-A}$~A ($q=\V{q-Wm3}$~W/m$^3$, \V{Qp-Wm}~W/m, \V{Qtot-W}~W in total), resistivity at \SI{20}{\celsius}; convection $h=\V{h-conv}$~W/(m$^2$\,K) to \V{T-amb}~\si{\celsius} air on the outer surfaces of core and flange; bore and exposed conductor surfaces insulated (conservative).
+\item Thermal-structural: the temperature field as thermal strain $\alpha(T-T_\mathrm{ref})$, stress-free at $T_\mathrm{ref}=\V{T-ref}$~\si{\celsius}, no mechanical load; then combined with S1 by superposition of displacements (the model is linear).
+\end{itemize}
+Stress at re-entrant and bi-material corners is singular. Each maximum von Mises stress is therefore given twice: the peak, and the maximum at more than \V{excl-mm}~mm from the singular ring edges (flange inner edges, edges of the fixed face, conductor exits from the core).
+
+\begin{figure}[!htb]\centering
+\includegraphics[width=0.40\textwidth]{fig1_geometry_mesh.png}
+\caption{Geometry and mesh on the axial cut $y=0$.}\label{fig:geo}
+\end{figure}
+
+\section{Verification}
+Table~\ref{tab:ver} compares each hand calculation with the FEA. The beam checks treat the part above the flange as a cantilever of length $L=\V{L-beam-m}$~m clamped at the flange bottom face: \V{a-beam-m}~m of core and conductor ($EI=\V{EIeff}$~N\,m$^2$), then \V{b-beam-m}~m of bare conductor ($EI=\V{EIc}$~N\,m$^2$).
+
+\begin{table}[!htb]\centering\small
+\caption{Verification of the FEA against analytical solutions. Difference $=(\text{FEA}-\text{analytical})/\text{analytical}$.}\label{tab:ver}
+\begin{adjustbox}{max width=\textwidth}\input{generated/verification_table.tex}\end{adjustbox}
+\end{table}
+
+\begin{itemize}
+\item \textbf{Deflection.} The uniform composite beam, $\delta=FL^3/(3EI_\mathrm{eff})$, gives the bare conductor the stiffness of the full section and so is too stiff. The two-segment beam is the fair check; the FEA is \V{ver2-diff}\,\% more flexible because the 3D model includes local deformation of the epoxy at the flange and around the conductor exit, which beam theory treats as rigid joints, plus a small shear deflection. Figure~\ref{fig:defl} shows the deflection lines.
+\item \textbf{First frequency.} $f_1=(1.875^2/2\pi)\sqrt{EI/(mL^4)}$ with the composite mass per length (\V{meff}~kg/m) puts far too much mass at the tip, where the bare conductor has only \V{mc}~kg/m. A 1D Euler-Bernoulli model of the two segments (\V{n-beam-el} beam elements) agrees with the FEA within \V{ver4-absdiff}\,\%.
+\item \textbf{Radial temperature.} The 1D long-cylinder solution (uniform generation in the tube, conduction through the epoxy, convection at the surface) under-predicts the rise at mid-height, because heat generated in the insulated conductor ends flows along the copper into the core region: the local radial heat flow there is \V{mid-Qlocal}~W/m, \V{mid-Qlocal-excess-pct}\,\% more than the local generation. With this local heat flow the same formula matches the FEA temperature drop across the epoxy within \V{ver8-absdiff}\,\%. The global energy balance closes (\V{Q-gen}~W generated, \V{Q-out}~W convected).
+\item \textbf{Thermal elongation.} Free copper expansion $\alpha L\,\overline{\Delta T}$ ($\overline{\Delta T}=\V{el-dTcond}$~K) under-predicts the FEA top displacement, because the stiffer epoxy, which expands twice as much, pulls the conductor. An $EA$-weighted composite strain for the bonded segment plus free expansion of the bare conductor agrees within \V{ver10-absdiff}\,\%.
+\end{itemize}
+
+\section{Results}
+\subsection{Static}
+\begin{table}[!htb]\centering\small
+\caption{Static results. Von Mises stress per body: peak (away from corners).}\label{tab:static}
+\begin{adjustbox}{max width=\textwidth}\input{generated/static_table.tex}\end{adjustbox}
+\end{table}
+Under S1 the top deflects \V{S1-top-mm}~mm. The highest stress is in the copper where it leaves the core top (\V{S1-conductor-max}~MPa at the corner, \V{S1-conductor-away}~MPa away from it), close to the beam value $Fb\,r_o/I=\V{sig-cond-beam-MPa}$~MPa. Stress in the flange stays below \V{S1-flange-max}~MPa (Figure~\ref{fig:s1}). S2 and S3 give very small values for this short, stiff model (S3 top deflection \V{S3-top-um}~\si{\micro\metre}).
+
+\begin{figure}[!htb]\centering
+\includegraphics[height=5.0cm]{fig2_s1_displacement.png}\hfill
+\includegraphics[height=5.0cm]{fig3_s1_von_mises_flange.png}
+\caption{S1: displacement (left, deformation scaled) and von Mises stress with a zoom at the flange (right).}\label{fig:s1}
+\end{figure}
+
+
+\begin{figure}[!htb]\centering
+\begin{minipage}[b]{0.50\textwidth}\centering
+\includegraphics[width=\textwidth]{fig8_s1_deflection_profile.png}
+\caption{S1 deflection along the conductor above the flange: FEA and two-segment beam.}\label{fig:defl}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.36\textwidth}\centering
+\includegraphics[width=\textwidth]{fig4_mode_shapes.png}
+\caption{First two mode shapes on the cuts $y=0$ and $x=0$ (deformation scaled).}\label{fig:modes}
+\end{minipage}
+\end{figure}
+
+\subsection{Modal}
+\begin{table}[!htb]\centering\small
+\caption{Natural frequencies and effective modal mass (fraction of the total mass, \V{mass-kg}~kg).}\label{tab:modal}
+\begin{adjustbox}{max width=\textwidth}\input{generated/modal_table.tex}\end{adjustbox}
+\end{table}
+The first two modes are bending of the part above the flange in two perpendicular planes at \V{f1}~Hz and \V{f2}~Hz. Their difference of \V{f12-diff-pct}\,\% comes only from the unstructured mesh, which confirms the symmetry of the model. The degenerate pairs were rotated to align with $x$ and $y$ before plotting (Figure~\ref{fig:modes}).
+
+
+\subsection{Thermal}
+The hot spot is \V{Tmax}~\si{\celsius} (a rise of \V{Tmax-rise}~K over ambient) at the top end of the conductor ($z=\V{Tmax-z}$~m), because the exposed conductor ends are insulated in this model and their heat must reach the core by conduction along the copper. The maximum epoxy temperature is \V{Tmax-core}~\si{\celsius} and the flange stays at \V{Tmax-flange}~\si{\celsius}. At core mid-height the FEA gives \V{mid-Tco-fea}~\si{\celsius} at the conductor surface and \V{mid-Tk-fea}~\si{\celsius} at the core surface (Figure~\ref{fig:temp}).
+
+\begin{figure}[!htb]\centering
+\includegraphics[width=0.62\textwidth]{fig5_temperature.png}
+\caption{Temperature on the axial cut and radial profile at core mid-height, FEA and 1D analytical.}\label{fig:temp}
+\end{figure}
+
+\subsection{Thermal-structural}\label{sec:tm}
+\begin{table}[!htb]\centering\footnotesize
+\begin{minipage}[t]{0.49\textwidth}\centering
+\caption{Thermal-structural von Mises stress per body: peak (away from corners).}\label{tab:tm}
+\begin{adjustbox}{max width=\textwidth}\input{generated/thermo_mech_table.tex}\end{adjustbox}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}\centering
+\caption{Thermal-only von Mises stress on each side of the bonded interfaces: peak (away from corners).}\label{tab:if}
+\begin{adjustbox}{max width=\textwidth}\input{generated/interface_table.tex}\end{adjustbox}
+\end{minipage}
+\end{table}
+The thermal stresses are much larger than those from S1, and adding S1 changes the maxima very little (Table~\ref{tab:tm}). They are driven by the expansion mismatch between copper (\V{alpha-cu}$\times10^{-6}$/K) and epoxy (\V{alpha-ep}$\times10^{-6}$/K) and by the fully fixed flange face, which prevents the radial growth of the flange and so clamps the core and conductor at the flange level, where all three peaks occur (Figure~\ref{fig:thstress}). With a sliding support (axial restraint only, four points against rigid-body motion) the peaks fall to \V{THSL-conductor-max}, \V{THSL-core-max} and \V{THSL-flange-max}~MPa. The thermal stress values are therefore sensitive to the mounting stiffness and to the assumed stress-free temperature, and they are indicative only.
+
+\begin{figure}[!htb]\centering
+\includegraphics[width=0.56\textwidth]{fig6_thermal_stress_flange.png}
+\caption{Thermal von Mises stress near the flange with fixed and sliding flange face (same colour scale).}\label{fig:thstress}
+\end{figure}
+
+\section{Mesh convergence}
+\begin{table}[!htb]\centering\small
+\caption{Mesh convergence for S1 and $f_1$. ``VM away'' excludes points within \V{excl-mm}~mm of singular edges.}\label{tab:conv}
+\begin{adjustbox}{max width=\textwidth}\input{generated/convergence_table.tex}\end{adjustbox}
+\end{table}
+From the medium to the fine mesh the top deflection changes by \V{cv-chg-topdeflectionpct}\,\% and $f_1$ by \V{cv-chg-f1pct}\,\%, so both are converged at the medium mesh used for the results. The stress picture is less clean. The peak stresses grow steadily with refinement in every body (epoxy \V{cv-coarse-core-max}, \V{cv-medium-core-max}, \V{cv-fine-core-max}~MPa; flange \V{cv-coarse-flange-max}, \V{cv-medium-flange-max}, \V{cv-fine-flange-max}~MPa), which is the expected behaviour at singular corners: they do not converge and are not design values. The maxima at \V{excl-mm}~mm from the singular edges do not grow, and in the copper they are converged (\V{cv-chg-conductor-away}\,\%). In the epoxy and the flange they still move by \V{cv-chg-core-away}\,\% and \V{cv-chg-flange-away}\,\% (epoxy \V{cv-coarse-core-away}, \V{cv-medium-core-away}, \V{cv-fine-core-away}~MPa), because \V{excl-mm}~mm is only one or two elements in the flange zone and the sampling point sits in a steep gradient. These local values are small in absolute terms but are not mesh-converged; a reliable local stress needs a local mesh refinement around the actual fillet radii, or a linearised or hot-spot stress method.
+
+\begin{figure}[!htb]\centering
+\includegraphics[width=0.78\textwidth]{fig7_mesh_convergence.png}
+\caption{Mesh convergence of S1 top deflection, S1 von Mises stress and $f_1$.}\label{fig:conv}
+\end{figure}
+
+\section{Limitations and next steps}
+\begin{itemize}
+\item Real geometry: sheds and housing, condenser foils, the oil-side part, the draw lead and the terminal.
+\item Mounting: bolted flange on a flexible tank cover, contact and preload instead of a fixed, bonded face.
+\item Seismic: response spectrum analysis to IEEE~693 with tank amplification, damping and modal combination, instead of a static-equivalent acceleration.
+\item Short-circuit electromagnetic forces on the conductor and terminal, and the adiabatic short-circuit temperature rise.
+\item Thermal and materials: temperature-dependent resistivity and properties, dielectric losses, radiation, heat transfer at the terminal and oil side, cure temperature and residual stress of the resin, allowables.
+\item Validation against test data; hand calculations only verify that the equations are solved correctly.
+\end{itemize}
+
+\section{References}
+{\small
+\begin{enumerate}[label={[\arabic*]}]
+\item IEC 60137, \emph{Insulated bushings for alternating voltages above 1000 V}.
+\item IEEE Std 693, \emph{IEEE Recommended Practice for Seismic Design of Substations}.
+\item FEniCSx project, dolfinx documentation, \url{https://docs.fenicsproject.org}.
+\item C. Geuzaine and J.-F. Remacle, Gmsh documentation, \url{https://gmsh.info}.
+\item SLEPc documentation, \url{https://slepc.upv.es}.
+\item W. C. Young and R. G. Budynas, \emph{Roark's Formulas for Stress and Strain}, McGraw-Hill (cantilever deflection, beam frequencies).
+\item F. P. Incropera et al., \emph{Fundamentals of Heat and Mass Transfer}, Wiley (radial conduction with heat generation, thermal resistance of cylinders).
+\end{enumerate}}
+
+\end{document}

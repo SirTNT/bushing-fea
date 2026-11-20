@@ -1,0 +1,17 @@
+name: bushing-fea
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - fenics-dolfinx=0.11   # code written for the 0.11 API
+  - mpich
+  - petsc4py
+  - slepc4py
+  - gmsh
+  - python-gmsh
+  - pyvista
+  - matplotlib
+  - numpy
+  - scipy
+  - pyyaml
+  - pandas

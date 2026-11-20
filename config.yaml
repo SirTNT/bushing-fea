@@ -1,0 +1,67 @@
+# Transformer bushing FEA: all parameters in SI units.
+# The bushing axis is the z axis. z = 0 is the bottom face of the insulating core.
+
+geometry:
+  conductor:            # central copper tube
+    outer_diameter: 0.040      # m
+    inner_diameter: 0.030      # m
+    length: 1.600              # m, centred on the core, so it spans z = -0.2 to 1.4 m
+  core:                 # resin-impregnated epoxy core, solid around the conductor
+    outer_diameter: 0.160      # m
+    length: 1.200              # m, spans z = 0 to 1.2 m
+  flange:               # aluminium mounting ring bonded to the core
+    outer_diameter: 0.300      # m (inner diameter equals the core outer diameter)
+    thickness: 0.030           # m
+    z_bottom: 0.400            # m, bottom face of the flange measured from the core bottom
+
+mesh:
+  h: 0.020                     # m, global element size: the single mesh-size parameter
+  conductor_size_ratio: 0.30   # element size at the conductor surface = ratio * h
+  flange_size_ratio: 0.50      # element size in the flange zone = ratio * h
+  refine_distance_ratio: 3.0   # size grows back to h over this many h from the conductor
+  element_order: 2             # quadratic (10-node) tetrahedra, quadratic displacement/temperature
+  convergence_h: [0.030, 0.020, 0.0135]   # m, coarse, medium, fine for the convergence study
+
+materials:
+  # Every value below is a typical literature value, assumed. Not taken from a datasheet.
+  copper:
+    E: 117.0e+9          # Pa, typical literature value, assumed
+    nu: 0.34            # -, typical literature value, assumed
+    rho: 8960.0         # kg/m3, typical literature value, assumed
+    k: 390.0            # W/(m K), typical literature value, assumed
+    alpha: 17.0e-6      # 1/K, typical literature value, assumed
+    resistivity: 1.72e-8  # Ohm m at 20 C, typical literature value, assumed
+  epoxy:
+    E: 12.0e+9           # Pa, typical literature value, assumed
+    nu: 0.35            # -, typical literature value, assumed
+    rho: 1800.0         # kg/m3, typical literature value, assumed
+    k: 0.6              # W/(m K), typical literature value, assumed
+    alpha: 35.0e-6      # 1/K, typical literature value, assumed
+  aluminium:
+    E: 70.0e+9           # Pa, typical literature value, assumed
+    nu: 0.33            # -, typical literature value, assumed
+    rho: 2700.0         # kg/m3, typical literature value, assumed
+    k: 200.0            # W/(m K), typical literature value, assumed
+    alpha: 23.0e-6      # 1/K, typical literature value, assumed
+
+loads:
+  g: 9.81               # m/s2
+  cantilever_force: 1000.0   # N, horizontal (x direction) on the top conductor end face.
+                             # Illustrative value; the IEC 60137 test load depends on rating
+                             # and should be checked in the standard.
+  seismic_horizontal_g: 0.5  # horizontal (x direction) acceleration in g for load case S3.
+                             # Simplified static-equivalent check, not a seismic qualification.
+  current: 1250.0       # A, load current for Joule heating
+  h_conv: 10.0          # W/(m2 K), natural convection coefficient on core and flange outer surfaces
+  T_ambient: 40.0       # C, ambient air temperature
+  T_reference: 20.0     # C, stress-free reference temperature for thermal strain
+
+modal:
+  n_modes: 6
+
+postprocessing:
+  # Stress at re-entrant corners is singular and does not converge. A second "away from
+  # corners" maximum excludes points closer than this distance to the singular ring edges.
+  corner_exclusion: 0.010    # m
+  radial_line_points: 200
+  axial_line_points: 400
