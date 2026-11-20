@@ -7,7 +7,7 @@ Every number below is filled from `results/results.json` by `src/make_tables.py`
 \projline{Transformer Bushing FEA: Static, Modal and Thermal-Structural}{FEniCSx, Gmsh, Python, self-directed, November 2026}
 \begin{itemize}
   \item Built an open-source 3D finite element model of a simplified transformer bushing in Python: static terminal load, modal analysis ($f_1$ = 82.66 Hz) and Joule-heating thermal-structural coupling.
-  \item Verified against beam theory (deflection within 7.4\,\%, $f_1$ within 1.9\,\%) and analytical radial heat conduction (within 0.1\,\%); mesh convergence study; github.com/archismahore/bushing-fea.
+  \item Verified against beam theory (deflection within 7.4\,\%, $f_1$ within 1.9\,\%) and analytical radial heat conduction (within 0.1\,\%); mesh convergence study; github.com/SirTNT/bushing-fea.
 \end{itemize}
 ```
 
